@@ -7,7 +7,6 @@
 
 import numpy
 import h5py
-import tables
 import collections
 import scipy.sparse as sp_sparse
 
@@ -15,22 +14,31 @@ FeatureBCMatrix = collections.namedtuple('FeatureBCMatrix', ['ids', 'names', 'ba
 
 
 def read_10X_h5(filename):
-    """Read 10X HDF5 files, support both gene expression and peaks."""
-    with tables.open_file(filename, 'r') as f:
-        try:
-            group = f.get_node(f.root, 'matrix')
-        except tables.NoSuchNodeError:
+    """Read 10X HDF5 files using h5py (replaces pytables for better compatibility)."""
+    with h5py.File(filename, 'r') as f:
+        if 'matrix' not in f:
             print("Matrix group does not exist in this file.")
             return None
-        feature_group = getattr(group, 'features')
-        ids = getattr(feature_group, 'id').read()
-        names = getattr(feature_group, 'name').read()
-        barcodes = getattr(group, 'barcodes').read()
-        data = getattr(group, 'data').read()
-        indices = getattr(group, 'indices').read()
-        indptr = getattr(group, 'indptr').read()
-        shape = getattr(group, 'shape').read()
+        
+        group = f['matrix']
+        feature_group = group['features']
+        
+        # Read feature data
+        ids = feature_group['id'][:]
+        names = feature_group['name'][:]
+        
+        # Read barcode data
+        barcodes = group['barcodes'][:]
+        
+        # Read sparse matrix data
+        data = group['data'][:]
+        indices = group['indices'][:]
+        indptr = group['indptr'][:]
+        shape = group['shape'][:]
+        
+        # Create sparse matrix
         matrix = sp_sparse.csc_matrix((data, indices, indptr), shape=shape)
+        
         return FeatureBCMatrix(ids, names, barcodes, matrix)
 
 
